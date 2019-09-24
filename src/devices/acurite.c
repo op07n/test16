@@ -23,14 +23,18 @@
 #define ACURITE_TXR_BITLEN        56
 #define ACURITE_5N1_BITLEN        64
 #define ACURITE_6045_BITLEN        72
+#define ACURITE_ATLAS_BITLEN      80
 
 // ** Acurite known message types
 #define ACURITE_MSGTYPE_TOWER_SENSOR                    0x04
 #define ACURITE_MSGTYPE_6045M                           0x2f
 #define ACURITE_MSGTYPE_5N1_WINDSPEED_WINDDIR_RAINFALL  0x31
 #define ACURITE_MSGTYPE_5N1_WINDSPEED_TEMP_HUMIDITY     0x38
-#define ACURITE_MSGTYPE_WINDSPEED_TEMP_HUMIDITY_3N1     0x20
+#define ACURITE_MSGTYPE_3N1_WINDSPEED_TEMP_HUMIDITY     0x20
 #define ACURITE_MSGTYPE_RAINFALL                        0x30
+#define ACURITE_MSGTYPE_ATLAS_WINDSPEED_TEMP_HUMIDITY   0x25
+#define ACURITE_MSGTYPE_ATLAS_RAINFALL                  0x26
+#define ACURITE_MSGTYPE_ATLAS_UNKNOWN                   0x27
 
 // Acurite 5n1 Wind direction values.
 // There are seem to be conflicting decodings.
@@ -186,7 +190,7 @@ static int acurite_th_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                 "id",               "",             DATA_INT,    id,
                 "battery",          "",             DATA_STRING, battery_low ? "LOW" : "OK",
                 "temperature_C",    "Temperature",  DATA_FORMAT, "%.1f C", DATA_DOUBLE, tempc,
-                "humidity",         "Humidity",     DATA_INT,    humidity,
+                "humidity",         "Humidity",     DATA_FORMAT, "%u %%", DATA_INT,    humidity,
                 "status",           "",             DATA_INT,    status,
                 NULL);
         /* clang-format on */
@@ -388,7 +392,7 @@ static int acurite_6045_decode(r_device *decoder, bitrow_t bb, int browlen)
             "channel",          NULL,               DATA_STRING, channel_str,
             "battery",          "battery",          DATA_STRING, battery_low ? "LOW" : "OK",
             "temperature_F",    "temperature",      DATA_FORMAT, "%.1f F",     DATA_DOUBLE,     tempf,
-            "humidity",         "humidity",         DATA_INT,    humidity,
+            "humidity",         "humidity",         DATA_FORMAT, "%u %%", DATA_INT,    humidity,
             "strike_count",     "strike_count",     DATA_INT,    strike_count,
             "storm_dist",       "storm_distance",   DATA_INT,    strike_distance,
             "active",           "active_mode",      DATA_INT,    active,    // @todo convert to bool
@@ -412,6 +416,7 @@ similar RF encoding and data format:
 - 592TXR temperature and humidity sensor
 - 5-n-1 weather station
 - 6045M Lightning Detector with Temperature and Humidity
+- Atlas
 
     CC RR IIII | IIII IIII | pBMMMMMM | pxxWWWWW | pWWWTTTT | pTTTTTTT | pSSSSSSS
     C:2d R:2d ID:12d 1x BATT:1b TYPE:6h 1x ?2b W:5b 1x 3b T:4b 1x 7b S: 1x 7d
@@ -446,8 +451,9 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
             fprintf(stderr, "%s: row %d bits %d, bytes %d \n", __func__, brow, bitbuffer->bits_per_row[brow], browlen);
 
         if ((bitbuffer->bits_per_row[brow] < ACURITE_TXR_BITLEN ||
-            bitbuffer->bits_per_row[brow] > ACURITE_5N1_BITLEN + 1) &&
-            bitbuffer->bits_per_row[brow] != ACURITE_6045_BITLEN) {
+                bitbuffer->bits_per_row[brow] > ACURITE_5N1_BITLEN + 1)
+                && bitbuffer->bits_per_row[brow] != ACURITE_6045_BITLEN
+                && bitbuffer->bits_per_row[brow] != ACURITE_ATLAS_BITLEN) {
             if (decoder->verbose > 1 && bitbuffer->bits_per_row[brow] > 16)
                 fprintf(stderr, "%s: skipping wrong len\n", __func__);
             continue;
@@ -510,7 +516,7 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                     "channel",              NULL,           DATA_STRING, &channel_str,
                     _X("battery_ok","battery_low"), "",     DATA_INT,    _X(!battery_low,battery_low),
                     "temperature_C",        "Temperature",  DATA_FORMAT, "%.1f C", DATA_DOUBLE, tempc,
-                    "humidity",             "Humidity",     DATA_INT,    humidity,
+                    "humidity",             "Humidity",     DATA_FORMAT, "%u %%", DATA_INT,    humidity,
                     NULL);
             /* clang-format on */
 
@@ -555,7 +561,7 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                 // Wind speed, wind direction, and rain fall
                 wind_dir = acurite_5n1_winddirections[bb[4] & 0x0f] * 22.5f;
 
-                // range: 0 to 99.99 in, 0.01 in incr., rolling counter?
+                // range: 0 to 99.99 in, 0.01 inch increments, accumulated
                 raincounter = ((bb[5] & 0x7f) << 7) | (bb[6] & 0x7F);
 
                 /* clang-format off */
@@ -594,14 +600,14 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                         "battery",      NULL,   DATA_STRING,    battery_low ? "OK" : "LOW",
                         _X("wind_avg_km_h","wind_speed_kph"),   "wind_speed",   DATA_FORMAT,    "%.1f km/h", DATA_DOUBLE,     wind_speed_kph,
                         "temperature_F",     "temperature",    DATA_FORMAT,    "%.1f F", DATA_DOUBLE,    tempf,
-                        "humidity",     NULL,    DATA_FORMAT,    "%d",   DATA_INT,   humidity,
+                        "humidity",     NULL,    DATA_FORMAT,    "%u %%",   DATA_INT,   humidity,
                         NULL);
                 /* clang-format on */
 
                 decoder_output_data(decoder, data);
                 valid++;
             }
-            else if (message_type == ACURITE_MSGTYPE_WINDSPEED_TEMP_HUMIDITY_3N1) {
+            else if (message_type == ACURITE_MSGTYPE_3N1_WINDSPEED_TEMP_HUMIDITY) {
                 // Wind speed, temperature and humidity for 3-n-1
                 sensor_id = ((bb[0] & 0x3f) << 8) | bb[1]; // 3-n-1 sensor ID is the bottom 14 bits of byte 0 & 1
                 humidity = (bb[3] & 0x7f); // 1-99 %rH
@@ -622,7 +628,7 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                         "battery",      NULL,   DATA_STRING,    battery_low ? "OK" : "LOW",
                         _X("wind_avg_mi_h","wind_speed_mph"),   "wind_speed",   DATA_FORMAT,    "%.1f mi/h", DATA_DOUBLE,     wind_speed_mph,
                         "temperature_F",     "temperature",    DATA_FORMAT,    "%.1f F", DATA_DOUBLE,    tempf,
-                        "humidity",     NULL,    DATA_FORMAT,    "%d",   DATA_INT,   humidity,
+                        "humidity",     NULL,    DATA_FORMAT,    "%u %%",   DATA_INT,   humidity,
                         NULL);
                 /* clang-format on */
 
@@ -659,6 +665,93 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
             valid += acurite_6045_decode(decoder, bb, browlen);
         }
 
+        else if (browlen == ACURITE_ATLAS_BITLEN / 8) {
+            // TODO: work in progress, very similar to 5n1
+            // 4b SEQ:2d DEVICE:10d TYPE:8h 8b 8b 8b 8b 8b 8b CHK:8h
+            // {80} 82 f3 65 00 88 72 22 00 9f 95  {80} 86 f3 65 00 88 72 22 00 9f 99  {80} 8a f3 65 00 88 72 22 00 9f 9d
+            // {80} 82 f3 66 00 05 e4 81 00 9f e4  {80} 86 f3 66 00 05 e4 81 00 9f e8  {80} 8a f3 66 00 05 e4 81 00 9f ec
+            // {80} 82 f3 e7 00 00 00 96 00 9f 91  {80} 86 f3 e7 00 00 00 96 00 9f 95  {80} 8a f3 e7 00 00 00 96 00 9f 99
+            // {80} 82 f3 66 00 05 60 81 00 9f 60  {80} 86 f3 66 00 05 60 81 00 9f 64  {80} 8a f3 66 00 05 60 81 00 9f 68
+            // {80} 82 f3 65 00 88 71 24 00 9f 96  {80} 86 f3 65 00 88 71 24 00 9f 9a  {80} 8a f3 65 00 88 71 24 00 9f 9e
+            // {80} 82 f3 65 00 88 71 a5 00 9f 17  {80} 86 f3 65 00 88 71 a5 00 9f 1b  {80} 8a f3 65 00 88 71 a5 00 9f 1f
+            bitrow_printf(bb, bitbuffer->bits_per_row[brow], "%s: Acurite Atlas raw msg: ", __func__);
+            sensor_id = ((bb[0] & 0x03) << 8) | bb[1];
+            channel   = acurite_getChannel(bb[0]);
+            sprintf(channel_str, "%c", channel);
+
+            // The sensor sends the same data three times, each of these have
+            // an indicator of which one of the three it is. This means the
+            // checksum and first byte will be different for each one.
+            // The bits 4,5 of byte 0 indicate which copy
+            //  xxxx 00 xx = first copy
+            //  xxxx 01 xx = second copy
+            //  xxxx 10 xx = third copy
+            sequence_num = (bb[0] & 0x0c) >> 2;
+            // Battery status is the 7th bit 0x40. 1 = normal, 0 = low
+            battery_low = (bb[2] & 0x40) == 0;
+
+            /* clang-format off */
+            data = data_make(
+                    "model",            "",         DATA_STRING, "Acurite-Atlas",
+                    "id",               NULL,       DATA_INT,    sensor_id,
+                    "channel",          NULL,       DATA_STRING, &channel_str,
+                    "sequence_num",     NULL,       DATA_INT,    sequence_num,
+                    "battery_ok",       NULL,       DATA_INT,    !battery_low,
+                    "message_type",     NULL,       DATA_INT,    message_type,
+                    NULL);
+            /* clang-format on */
+
+            // TODO: copied from 5N1
+            int speed_raw  = ((bb[3] & 0x1F) << 3) | ((bb[4] & 0x70) >> 4);
+            wind_speed_kph = 0;
+            if (speed_raw > 0) {
+                wind_speed_kph = speed_raw * 0.8278 + 1.0;
+            }
+
+            if (message_type == ACURITE_MSGTYPE_ATLAS_WINDSPEED_TEMP_HUMIDITY) {
+                // Wind speed, temperature and humidity
+
+                // range -40 to 158 F
+                int temp_raw = (bb[4] & 0x0F) << 7 | (bb[5] & 0x7F);
+                tempf = (temp_raw - 400) * 0.1;
+
+                humidity = (bb[6] & 0x7f); // 1-99 %rH
+
+                /* clang-format off */
+                data = data_append(data,
+                        "wind_avg_km_h",    "wind_speed",   DATA_FORMAT,    "%.1f km/h",    DATA_DOUBLE, wind_speed_kph,
+                        "temperature_F",    "temperature",  DATA_FORMAT,    "%.1f F",       DATA_DOUBLE, tempf,
+                        "humidity",         NULL,           DATA_FORMAT,    "%u %%",        DATA_INT,    humidity,
+                        NULL);
+                /* clang-format on */
+            }
+
+            if (message_type == ACURITE_MSGTYPE_ATLAS_RAINFALL) {
+                // Wind speed, wind direction, and rain fall
+                wind_dir = acurite_5n1_winddirections[bb[4] & 0x0f] * 22.5f;
+
+                // range: 0 to 99.99 in, 0.01 inch increments, accumulated
+                raincounter = ((bb[5] & 0x7f) << 7) | (bb[6] & 0x7F);
+
+                /* clang-format off */
+                data = data_append(data,
+                        "wind_avg_km_h",    "wind_speed",   DATA_FORMAT,    "%.1f km/h",    DATA_DOUBLE, wind_speed_kph,
+                        "wind_dir_deg",     NULL,           DATA_FORMAT,    "%.1f",         DATA_DOUBLE, wind_dir,
+                        "rain_in",          "Rainfall Accumulation", DATA_FORMAT, "%.2f in", DATA_DOUBLE, raincounter * 0.01f,
+                        NULL);
+                /* clang-format on */
+            }
+
+            if (message_type == ACURITE_MSGTYPE_ATLAS_UNKNOWN) {
+                // Likely UV Index, Light Intensity, Lightning?
+                // might be similar to Acurite 6045m?
+
+                // ...
+            }
+
+            decoder_output_data(decoder, data);
+            valid++;
+        }
     }
 
     return valid;
@@ -911,7 +1004,7 @@ static int acurite_00275rm_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                     "id",              "",             DATA_INT,       id,
                     "battery",         "",             DATA_STRING,    battery_low ? "LOW" : "OK",
                     "temperature_C",   "Celsius",      DATA_FORMAT,    "%.1f C",  DATA_DOUBLE, tempc,
-                    "humidity",        "Humidity",     DATA_INT,       humidity,
+                    "humidity",        "Humidity",     DATA_FORMAT, "%u %%", DATA_INT,       humidity,
                     NULL);
             /* clang-format on */
 
@@ -942,7 +1035,7 @@ static int acurite_00275rm_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                 /* clang-format off */
                 data = data_append(data,
                         _X("temperature_1_C", "ptemperature_C"),  "Celsius",      DATA_FORMAT,    "%.1f C",  DATA_DOUBLE, ptempc,
-                        _X("humidity_1", "phumidity"),       "Humidity",     DATA_INT,       phumidity,
+                        _X("humidity_1", "phumidity"),       "Humidity",     DATA_FORMAT, "%u %%", DATA_INT,       phumidity,
                         "mic",             "Integrity",    DATA_STRING,    "CRC",
                         NULL);
                 /* clang-format on */
