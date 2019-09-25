@@ -33,8 +33,8 @@
 #define ACURITE_MSGTYPE_3N1_WINDSPEED_TEMP_HUMIDITY     0x20
 #define ACURITE_MSGTYPE_RAINFALL                        0x30
 #define ACURITE_MSGTYPE_ATLAS_WINDSPEED_TEMP_HUMIDITY   0x25
-#define ACURITE_MSGTYPE_ATLAS_RAINFALL                  0x26
-#define ACURITE_MSGTYPE_ATLAS_UNKNOWN                   0x27
+#define ACURITE_MSGTYPE_ATLAS_WINDSPEED_RAINFALL        0x26
+#define ACURITE_MSGTYPE_ATLAS_WINDSPEED_UV_LUX          0x27
 
 // Acurite 5n1 Wind direction values.
 // There are seem to be conflicting decodings.
@@ -424,6 +424,69 @@ similar RF encoding and data format:
 @todo - refactor, move 5n1 and txr decoding into separate functions.
 @todo - TBD Are parity and checksum the same across these devices?
         (opportunity to DRY-up and simplify?)
+
+Acurite Atlas:
+
+| Reading           | Operating Range               | Reading Frequency | Accuracy |
+| ---               | ---                           | ---        | ---             |
+| Temperature Range | -40 to 158°F (-40 to 70°C)    | 30 seconds | ± 1°F |
+| Humidity Range    | 1-100% RH                     | 30 seconds | ± 2% RH |
+| Wind Speed        | 0-160 mph (0-257 km/h)        | 10 seconds | ± 1 mph ≤ 10 mph, ± 10% > 10 mph |
+| Wind Direction    | 360°                          | 30 seconds | ± 3° |
+| Rain              | .01 inch intervals (0.254 mm) | 30 seconds | ± 5% |
+| UV Index          | 0 to 15 index                 | 30 seconds | ± 1 |
+| Light Intensity   | to 120,000 Lumens             | 30 seconds | n/a |
+| Lightning         | Up to 25 miles away (40 km)   | 10 seconds | n/a |
+
+The Atlas reports direction with an AS5600 hall effect sensor, it has 12-bit resolution according to the spec sheet. https://ams.com/as5600
+
+Acurite Atlas Message Type Format:
+
+Message Type 0x25 (Wind Speed, Temperature, Relative Humidity, ???)
+
+    Byte 1   Byte 2   Byte 3   Byte 4   Byte 5   Byte 6   Byte 7   Byte 8   Byte 9   Byte 10
+    cc??ssdd dddddddd pb011011 pWWWWWWW pWTTTTTT pTTTTTTT pHHHHHHH pXXXXXXX pXXXXXXX kkkkkkkkk
+
+Note: 13 bits for Temp is too much, should only be 11 bits.
+
+Message Type 0x26 (Wind Speed, Wind Vector, Rain Counter, ???)
+
+    Byte 1   Byte 2   Byte 3   Byte 4   Byte 5   Byte 6   Byte 7   Byte 8   Byte 9   Byte 10
+    cc??ssdd dddddddd pb011100 pWWWWWWW pW?VVVVV pVVVVV?? pRRRRRRR pXXXXXXX pXXXXXXX kkkkkkkkk
+
+    CHANNEL:2b xx ~SEQ:2d ~DEVICE:10d xx ~TYPE:6h SPEED:x~7bx~1b DIR:x~5bx~5bxx x~7b x~7b x~7b CHK:8h
+
+Note: 10 bits for Vector is too much, should only be 9 bits.
+Note: 7 bits for Rain not enough, should reasonably be 10 bits.
+
+Message Type 0x27 (Wind Speed, UV and Lux data)
+
+    Byte 1   Byte 2   Byte 3   Byte 4   Byte 5   Byte 6   Byte 7   Byte 8   Byte 9   Byte 10
+    cc??ssdd dddddddd pb011101 pWWWWWWW pWUUUUUU pLLLLLLL pLLLLLLL pXXXXXXX pXXXXXXX kkkkkkkkk
+
+Note: 6 bits for UV is too much, should only be 4 bits.
+
+    CHANNEL:2b xx ~SEQ:2d ~DEVICE:10d xx ~TYPE:6h SPEED:x~7bx~1b UV:~6d LUX:x~7bx~7b x~7b x~7b CHK:8h
+
+Lux needs to multiplied by 10.
+
+- b = bATTERY
+- c = cHANNEL
+- d = dEVICE
+- k = CHECkSUM
+- p = pARITY
+- s = sEQUENCE
+- ? = uNKNOWN
+
+- H = relative Humidity (percent)
+- R = Rain (0.01 inch bucket tip count)
+- T = Temperature (Fahrenheit.  Subtract 400 then divide by 10.)
+- V = wind Vector (degrees decimal)
+- W = Wind speed (miles per hour)
+- U = UV Index
+- L = Lux
+- X = Lightning Strike ?
+
 */
 static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
 {
@@ -666,8 +729,6 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
         }
 
         else if (browlen == ACURITE_ATLAS_BITLEN / 8) {
-            // TODO: work in progress, very similar to 5n1
-            // 4b SEQ:2d DEVICE:10d TYPE:8h 8b 8b 8b 8b 8b 8b CHK:8h
             // {80} 82 f3 65 00 88 72 22 00 9f 95  {80} 86 f3 65 00 88 72 22 00 9f 99  {80} 8a f3 65 00 88 72 22 00 9f 9d
             // {80} 82 f3 66 00 05 e4 81 00 9f e4  {80} 86 f3 66 00 05 e4 81 00 9f e8  {80} 8a f3 66 00 05 e4 81 00 9f ec
             // {80} 82 f3 e7 00 00 00 96 00 9f 91  {80} 86 f3 e7 00 00 00 96 00 9f 95  {80} 8a f3 e7 00 00 00 96 00 9f 99
@@ -690,6 +751,9 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
             // Battery status is the 7th bit 0x40. 1 = normal, 0 = low
             battery_low = (bb[2] & 0x40) == 0;
 
+            // Wind speed is 8-bits raw MPH
+            wind_speed_mph = ((bb[3] & 0x7F) << 1) | ((bb[4] & 0x40) >> 6);
+
             /* clang-format off */
             data = data_make(
                     "model",            "",         DATA_STRING, "Acurite-Atlas",
@@ -698,20 +762,15 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
                     "sequence_num",     NULL,       DATA_INT,    sequence_num,
                     "battery_ok",       NULL,       DATA_INT,    !battery_low,
                     "message_type",     NULL,       DATA_INT,    message_type,
+                    "wind_avg_mi_h",    "Wind Speed", DATA_FORMAT, "%.1f mi/h", DATA_DOUBLE, wind_speed_mph,
                     NULL);
             /* clang-format on */
-
-            // TODO: copied from 5N1
-            int speed_raw  = ((bb[3] & 0x1F) << 3) | ((bb[4] & 0x70) >> 4);
-            wind_speed_kph = 0;
-            if (speed_raw > 0) {
-                wind_speed_kph = speed_raw * 0.8278 + 1.0;
-            }
 
             if (message_type == ACURITE_MSGTYPE_ATLAS_WINDSPEED_TEMP_HUMIDITY) {
                 // Wind speed, temperature and humidity
 
-                // range -40 to 158 F
+                // range -40 to 160 F
+                // FIXME: are there really 13 bits? use 11 for now.
                 int temp_raw = (bb[4] & 0x0F) << 7 | (bb[5] & 0x7F);
                 tempf = (temp_raw - 400) * 0.1;
 
@@ -719,35 +778,52 @@ static int acurite_txr_decode(r_device *decoder, bitbuffer_t *bitbuffer)
 
                 /* clang-format off */
                 data = data_append(data,
-                        "wind_avg_km_h",    "wind_speed",   DATA_FORMAT,    "%.1f km/h",    DATA_DOUBLE, wind_speed_kph,
                         "temperature_F",    "temperature",  DATA_FORMAT,    "%.1f F",       DATA_DOUBLE, tempf,
                         "humidity",         NULL,           DATA_FORMAT,    "%u %%",        DATA_INT,    humidity,
                         NULL);
                 /* clang-format on */
             }
 
-            if (message_type == ACURITE_MSGTYPE_ATLAS_RAINFALL) {
+            if (message_type == ACURITE_MSGTYPE_ATLAS_WINDSPEED_RAINFALL) {
                 // Wind speed, wind direction, and rain fall
-                wind_dir = acurite_5n1_winddirections[bb[4] & 0x0f] * 22.5f;
+                wind_dir = ((bb[4] & 0x1f) << 5) | ((bb[5] & 0x7c) >> 2);
 
                 // range: 0 to 99.99 in, 0.01 inch increments, accumulated
-                raincounter = ((bb[5] & 0x7f) << 7) | (bb[6] & 0x7F);
+                // FIXME: are there really only 7 bits? use 9 for now.
+                raincounter = ((bb[5] & 0x03) << 7) | (bb[6] & 0x7F);
 
                 /* clang-format off */
                 data = data_append(data,
-                        "wind_avg_km_h",    "wind_speed",   DATA_FORMAT,    "%.1f km/h",    DATA_DOUBLE, wind_speed_kph,
                         "wind_dir_deg",     NULL,           DATA_FORMAT,    "%.1f",         DATA_DOUBLE, wind_dir,
                         "rain_in",          "Rainfall Accumulation", DATA_FORMAT, "%.2f in", DATA_DOUBLE, raincounter * 0.01f,
                         NULL);
                 /* clang-format on */
             }
 
-            if (message_type == ACURITE_MSGTYPE_ATLAS_UNKNOWN) {
-                // Likely UV Index, Light Intensity, Lightning?
-                // might be similar to Acurite 6045m?
+            if (message_type == ACURITE_MSGTYPE_ATLAS_WINDSPEED_UV_LUX) {
+                // Wind speed, UV Index, Light Intensity, Lightning?
+                int uv = (bb[4] & 0x3f);
+                int lux = ((bb[5] & 0x7f) << 7) | (bb[6] & 0x7F);
 
-                // ...
+                /* clang-format off */
+                data = data_append(data,
+                        "uv",               NULL,           DATA_INT, uv,
+                        "lux",              NULL,           DATA_INT, lux * 10,
+                        NULL);
+                /* clang-format on */
             }
+
+            int byte8  = (bb[7] & 0x7f);
+            int byte9  = (bb[8] & 0x7f);
+            int byte89 = ((bb[7] & 0x7f) << 7) | (bb[8] & 0x7F);
+
+            /* clang-format off */
+            data = data_append(data,
+                    "byte8",                NULL,           DATA_INT, byte8,
+                    "byte9",                NULL,           DATA_INT, byte9,
+                    "byte89",               NULL,           DATA_INT, byte89,
+                    NULL);
+            /* clang-format on */
 
             decoder_output_data(decoder, data);
             valid++;
@@ -1129,7 +1205,7 @@ static char *acurite_txr_output_fields[] = {
 };
 
 r_device acurite_txr = {
-    .name           = "Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning",
+    .name           = "Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning, 3N1, Atlas",
     .modulation     = OOK_PULSE_PWM,
     .short_width    = 220,  // short pulse is 220 us + 392 us gap
     .long_width     = 408,  // long pulse is 408 us + 204 us gap
