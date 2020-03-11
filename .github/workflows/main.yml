@@ -30,9 +30,11 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
+          cd ..
           Invoke-WebRequest -Uri "https://github.com/winterrace/librtlsdr/releases/download/0.6.0_upd/librtlsdr_0.6.0_win64_2019-08-19.zip" -OutFile librtlsdr_0.6.0_win64_2019-08-19.zip
           &7z x librtlsdr_0.6.0_win64_2019-08-19.zip -ortl-sdr
           Remove-Item librtlsdr_0.6.0_win64_2019-08-19.zip
+          dir
         
           
       - name: Build (Windows)
@@ -42,5 +44,6 @@ jobs:
             mkdir build
             cd build
             cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..
-            .\MSBuild.exe "$Env:GITHUB_WORKSPACE\rtl_433_win\vs15\rtl_433.sln" -p:TargetFramework=net472 
+            msbuild.exe "$Env:GITHUB_WORKSPACE\rtl_433_win\vs15\rtl_433.sln"
+
         shell: cmd
