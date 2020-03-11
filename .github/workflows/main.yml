@@ -23,9 +23,18 @@ jobs:
       - uses: actions/checkout@v1
         with:
           submodules: true
+          path: rtl_433_win
 
 
       # WINDOWS
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/winterrace/librtlsdr/releases/download/0.6.0_upd/librtlsdr_0.6.0_win64_2019-08-19.zip" -OutFile librtlsdr_0.6.0_win64_2019-08-19.zip
+          &7z x librtlsdr_0.6.0_win64_2019-08-19.zip -ortl-sdr
+          Remove-Item librtlsdr_0.6.0_win64_2019-08-19.zip
+          
+          
       - name: Build (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
