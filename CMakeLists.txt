@@ -92,8 +92,8 @@ set_property(CACHE ENABLE_RTLSDR PROPERTY STRINGS AUTO ON OFF)
 if(ENABLE_RTLSDR) # AUTO / ON
 
 find_package(PkgConfig)
-find_package(LibRTLSDR)
-find_package(LibUSB)
+find_package(LibRTLSDR PATHS ${PROJECT_SOURCE_DIR}/rtl-sdr)
+find_package(LibUSB PATHS ${PROJECT_SOURCE_DIR}/rtl-sdr)
 if(LIBRTLSDR_FOUND AND LIBUSB_FOUND)
     message(STATUS "RTL-SDR device input will be compiled.")
     include_directories(${LIBRTLSDR_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
