@@ -32,6 +32,7 @@ jobs:
             call "%programfiles(x86)%\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
             mkdir build
             cd build
-            cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..            
+            cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..   
+            cd ..         
             MSBuild.exe rtl433.sln
         shell: cmd
