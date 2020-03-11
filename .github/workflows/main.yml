@@ -1,0 +1,40 @@
+---
+name: Build
+
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          submodules: true
+
+
+      # WINDOWS
+      - name: Build (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+            call "%programfiles(x86)%\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+            MSBUILD_PATH="c:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
+            export PATH=$MSBUILD_PATH:$PATH
+            mkdir build
+            cd build
+            cmake -DENABLE_RTLSDR=OFF -G "Visual Studio 15 2017 Win64" ..
+            MSBuild.exe rtl433.sln
+            
+        shell: cmd
