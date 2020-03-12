@@ -12,7 +12,7 @@ set(LIBUSB_DEFINITIONS ${LIBUSB_PKG_CFLAGS_OTHER})
 find_path(LIBUSB_INCLUDE_DIR NAMES libusb.h
           HINTS ${LIBUSB_PKG_INCLUDE_DIRS}
           PATHS
-          ${PROJECT_SOURCE_DIR}/../rtl-sdr
+          ${PROJECT_SOURCE_DIR}/../libusb/include/libusb-1.0
           /usr/include/libusb-1.0
           /usr/include
           /usr/local/include )
@@ -29,7 +29,7 @@ find_library(LIBUSB_LIBRARY
              NAMES ${libusb1_library_names}
              HINTS ${LIBUSB_PKG_LIBRARY_DIRS}
              PATHS
-             ${PROJECT_SOURCE_DIR}/../rtl-sdr/x64
+             ${PROJECT_SOURCE_DIR}/../libusb/MS64/dll
              /usr/lib
              /usr/local/lib )
 
@@ -45,7 +45,7 @@ set(LIBUSB_LIBRARIES ${LIBUSB_LIBRARY} )
 set(LIBUSB_INCLUDE_DIRS ${LIBUSB_INCLUDE_DIR} )
 
 
-set(LIBUSB_LIBRARIES ${PROJECT_SOURCE_DIR}/../libusb/MS64/dll )
-set(LIBUSB_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/../libusb/include/libusb-1.0 )
+# set(LIBUSB_LIBRARIES ${PROJECT_SOURCE_DIR}/../libusb/MS64/dll )
+# set(LIBUSB_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/../libusb/include/libusb-1.0 )
 
 
