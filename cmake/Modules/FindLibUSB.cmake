@@ -12,7 +12,7 @@ set(LIBUSB_DEFINITIONS ${LIBUSB_PKG_CFLAGS_OTHER})
 find_path(LIBUSB_INCLUDE_DIR NAMES libusb.h
           HINTS ${LIBUSB_PKG_INCLUDE_DIRS}
           PATHS
-          ${PROJECT_SOURCE_DIR}/rtl-sdr
+          ${PROJECT_SOURCE_DIR}/../rtl-sdr
           /usr/include/libusb-1.0
           /usr/include
           /usr/local/include )
@@ -29,7 +29,7 @@ find_library(LIBUSB_LIBRARY
              NAMES ${libusb1_library_names}
              HINTS ${LIBUSB_PKG_LIBRARY_DIRS}
              PATHS
-             ${PROJECT_SOURCE_DIR}/rtl-sdr/x64
+             ${PROJECT_SOURCE_DIR}/../rtl-sdr/x64
              /usr/lib
              /usr/local/lib )
 
