@@ -42,11 +42,11 @@ jobs:
       - name: Build (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
-            call "%programfiles(x86)%\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+            call "%programfiles(x86)%\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
             dir
             mkdir build
             cd build
-            cmake  -DENABLE_RTLSDR=ON -G "Visual Studio 15 2017" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..
+            cmake  -DENABLE_RTLSDR=ON -G "Visual Studio 16 2019" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..
 
             cmake --build . --config Release
             
