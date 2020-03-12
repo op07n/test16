@@ -44,8 +44,8 @@ jobs:
             dir
             mkdir build
             cd build
-            cmake  -DENABLE_RTLSDR=OFF -G "Visual Studio 16 2019" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..
-            cd vs15
+            cmake  -DENABLE_RTLSDR=ON -G "Visual Studio 16 2019" -A x64 -DCMAKE_VERBOSE_MAKEFILE=true -DCMAKE_CONFIGURATION_TYPES=Release ..
+            # cd vs15
             msbuild.exe rtl_433.sln
 
         shell: cmd
