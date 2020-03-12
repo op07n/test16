@@ -12,12 +12,14 @@ set(LIBRTLSDR_DEFINITIONS ${LIBRTLSDR_PKG_CFLAGS_OTHER})
 find_path(LIBRTLSDR_INCLUDE_DIR NAMES rtl-sdr.h
           HINTS ${LIBRTLSDR_PKG_INCLUDE_DIRS}
           PATHS
+          ${PROJECT_SOURCE_DIR}/rtl-sdr
           /usr/include
           /usr/local/include )
 
 find_library(LIBRTLSDR_LIBRARY NAMES rtlsdr
              HINTS ${LIBRTLSDR_PKG_LIBRARY_DIRS}
              PATHS
+             ${PROJECT_SOURCE_DIR}/rtl-sdr/x64
              /usr/lib
              /usr/local/lib )
 
