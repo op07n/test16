@@ -93,9 +93,9 @@ if(ENABLE_RTLSDR) # AUTO / ON
 
 find_package(PkgConfig)
 find_package(LibRTLSDR)
-set(LIBUSB_LIBRARIES ${PROJECT_SOURCE_DIR}/../rtl-sdr )
-set(LIBUSB_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/../rtl-sdr )
-# find_package(LibUSB)
+# set(LIBUSB_LIBRARIES ${PROJECT_SOURCE_DIR}/../rtl-sdr )
+# set(LIBUSB_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/../rtl-sdr )
+find_package(LibUSB)
 # if(LIBRTLSDR_FOUND AND LIBUSB_FOUND)
     message(STATUS "RTL-SDR device input will be compiled.")
     include_directories(${LIBRTLSDR_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
